@@ -1,0 +1,282 @@
+name: CDK multi-stage deploy (env-specific assemblies)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      stacks:
+        description: 'Space-separated stack names (optional). If empty, auto-detect from the env assembly.'
+        required: false
+        default: ''
+      ref:
+        description: 'Git ref (branch, tag, or SHA) to deploy'
+        required: false
+        default: ''
+
+concurrency:
+  group: cdk-multistage-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  synth:
+    name: Synthesize CDK (cdk.out)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CDK CLI
+        run: npm i -g aws-cdk@2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CDK Python deps
+        working-directory: cdk
+        run: pip install -r requirements.txt
+
+      - name: Synthesize
+        working-directory: cdk
+        run: |
+          mkdir -p ../cdk.out
+          cdk synth -o ../cdk.out
+
+      - name: Show assemblies produced
+        run: |
+          echo "Assemblies in cdk.out:"
+          ls -la cdk.out || true
+          find cdk.out -maxdepth 1 -type d -name '*assembly*' -print || true
+
+      - name: Zip cloud assembly
+        run: |
+          cd cdk.out
+          zip -r ../cdk-out.zip .
+      - name: Upload zipped assembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-out-zip
+          path: cdk-out.zip
+
+  deploy_dev:
+    name: Deploy to dev (dev-assembly)
+    needs: synth
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ASSEMBLY_DIR: dev-assembly
+    steps:
+      - name: Checkout (for Docker assets)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Download zipped assembly
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-out-zip
+          path: .
+
+      - name: Unzip
+        run: unzip cdk-out.zip -d cdk.out
+
+      - name: Verify assembly exists
+        id: assembly
+        run: |
+          APP_PATH="cdk.out/${ASSEMBLY_DIR}"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Expected assembly directory not found: $APP_PATH"
+            echo "Available:"
+            ls -la cdk.out || true
+            exit 1
+          fi
+          echo "app=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CDK CLI
+        run: npm i -g aws-cdk@2
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve stacks
+        id: stacks
+        run: |
+          if [ -n "${{ github.event.inputs.stacks }}" ]; then
+            echo "value=${{ github.event.inputs.stacks }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=$(cdk ls --app '${{ steps.assembly.outputs.app }}')" >> $GITHUB_OUTPUT
+          fi
+
+      # - name: cdk bootstrap (idempotent)
+      #   run: cdk bootstrap --app '${{ steps.assembly.outputs.app }}'
+
+      - name: cdk diff
+        run: cdk diff --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} || true
+
+      - name: cdk deploy
+        run: cdk deploy --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} --require-approval never
+
+  deploy_staging:
+    name: Deploy to staging (staging-assembly)
+    needs: deploy_dev
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ASSEMBLY_DIR: staging-assembly
+    steps:
+      - name: Checkout (for Docker assets)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Download zipped assembly
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-out-zip
+          path: .
+
+      - name: Unzip
+        run: unzip cdk-out.zip -d cdk.out
+
+      - name: Verify assembly exists
+        id: assembly
+        run: |
+          APP_PATH="cdk.out/${ASSEMBLY_DIR}"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Expected assembly directory not found: $APP_PATH"
+            echo "Available:"
+            ls -la cdk.out || true
+            exit 1
+          fi
+          echo "app=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CDK CLI
+        run: npm i -g aws-cdk@2
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve stacks
+        id: stacks
+        run: |
+          if [ -n "${{ github.event.inputs.stacks }}" ]; then
+            echo "value=${{ github.event.inputs.stacks }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=$(cdk ls --app '${{ steps.assembly.outputs.app }}')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: cdk bootstrap (idempotent)
+        run: cdk bootstrap --app '${{ steps.assembly.outputs.app }}'
+
+      - name: cdk diff
+        run: cdk diff --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} || true
+
+      - name: cdk deploy
+        run: cdk deploy --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} --require-approval never
+
+  deploy_prod:
+    name: Deploy to prod (prod-assembly)
+    needs: deploy_staging
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ASSEMBLY_DIR: prod-assembly
+    steps:
+      - name: Checkout (for Docker assets)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Download zipped assembly
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-out-zip
+          path: .
+
+      - name: Unzip
+        run: unzip cdk-out.zip -d cdk.out
+
+      - name: Verify assembly exists
+        id: assembly
+        run: |
+          APP_PATH="cdk.out/${ASSEMBLY_DIR}"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Expected assembly directory not found: $APP_PATH"
+            echo "Available:"
+            ls -la cdk.out || true
+            exit 1
+          fi
+          echo "app=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CDK CLI
+        run: npm i -g aws-cdk@2
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve stacks
+        id: stacks
+        run: |
+          if [ -n "${{ github.event.inputs.stacks }}" ]; then
+            echo "value=${{ github.event.inputs.stacks }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=$(cdk ls --app '${{ steps.assembly.outputs.app }}')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: cdk bootstrap (idempotent)
+        run: cdk bootstrap --app '${{ steps.assembly.outputs.app }}'
+
+      - name: cdk diff
+        run: cdk diff --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} || true
+
+      - name: cdk deploy
+        run: cdk deploy --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} --require-approval never
