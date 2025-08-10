@@ -150,7 +150,7 @@ jobs:
         run: cdk diff --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} || true
 
       - name: cdk deploy
-        run: cdk deploy --app '${{ steps.assembly.outputs.app }}' ${{ steps.stacks.outputs.value }} --require-approval never
+        run: cdk deploy --all --app '${{ steps.assembly.outputs.app }}' --require-approval never
 
   deploy_staging:
     name: Deploy to staging (staging-assembly)
