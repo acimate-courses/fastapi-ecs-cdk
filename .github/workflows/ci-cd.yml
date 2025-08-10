@@ -125,7 +125,7 @@ jobs:
           # role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           # aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: arn:aws:iam::707690426194:role/training-github-oidc-cdk
-          aws-resion: us-east-1
+          aws-region: us-east-1
 
       - name: Resolve stacks
         id: stacks
