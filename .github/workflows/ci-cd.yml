@@ -2,7 +2,7 @@ name: CDK multi-stage deploy (env-specific assemblies)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main1 ]
     paths:
       - 'app/**'
       - 'infra/**'
@@ -10,13 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       stacks:
-        description: 'Space-separated stack names (optional). If empty, auto-detect from the env assembly.'
+        description: 'Space-separated stack names (optional).'
         required: false
         default: ''
       ref:
         description: 'Git ref (branch, tag, or SHA) to deploy'
-        required: false
-        default: ''
+        required: true
+        default: main
 
 concurrency:
   group: cdk-multistage-${{ github.ref }}
