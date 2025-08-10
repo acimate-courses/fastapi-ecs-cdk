@@ -49,11 +49,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install CDK Python deps
-        working-directory: cdk
+        working-directory: infra
         run: pip install -r requirements.txt
 
       - name: Synthesize
-        working-directory: cdk
+        working-directory: infra
         run: |
           mkdir -p ../cdk.out
           cdk synth -o ../cdk.out
