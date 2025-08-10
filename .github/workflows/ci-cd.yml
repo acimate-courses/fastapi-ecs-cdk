@@ -133,8 +133,13 @@ jobs:
           if [ -n "${{ github.event.inputs.stacks }}" ]; then
             echo "value=${{ github.event.inputs.stacks }}" >> "$GITHUB_OUTPUT"
           else
-            STACKS_LIST="$(cdk ls --app '${{ steps.assembly.outputs.app }}' | awk '{print $NF}' | sed 's/^(//; s/)$//')"
-            echo "value=${STACKS_LIST}" >> "$GITHUB_OUTPUT"
+            STACKS_LIST="$(cdk ls --app '${{ needs.assembly.outputs.app }}' \
+              | awk '{ gsub(/\(|\)/,"",$NF); print $NF }')"
+            {
+              echo "value<<EOF"
+              echo "$STACKS_LIST"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
 
