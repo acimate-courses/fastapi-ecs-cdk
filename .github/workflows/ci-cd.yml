@@ -83,7 +83,7 @@ jobs:
       id-token: write
       contents: read
     env:
-      ASSEMBLY_DIR: dev-assembly
+      ASSEMBLY_DIR: assembly-dev
     steps:
       - name: Checkout (for Docker assets)
         uses: actions/checkout@v4
@@ -102,7 +102,7 @@ jobs:
       - name: Verify assembly exists
         id: assembly
         run: |
-          APP_PATH="${ASSEMBLY_DIR}"
+          APP_PATH="cdk.out/${ASSEMBLY_DIR}"
           if [ ! -d "$APP_PATH" ]; then
             echo "::error::Expected assembly directory not found: $APP_PATH"
             echo "Available:"
@@ -173,7 +173,7 @@ jobs:
       - name: Verify assembly exists
         id: assembly
         run: |
-          APP_PATH="./${ASSEMBLY_DIR}"
+          APP_PATH="cdk.out/${ASSEMBLY_DIR}"
           if [ ! -d "$APP_PATH" ]; then
             echo "::error::Expected assembly directory not found: $APP_PATH"
             echo "Available:"
