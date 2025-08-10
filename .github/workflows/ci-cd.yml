@@ -102,7 +102,7 @@ jobs:
       - name: Verify assembly exists
         id: assembly
         run: |
-          APP_PATH="./${ASSEMBLY_DIR}"
+          APP_PATH="${ASSEMBLY_DIR}"
           if [ ! -d "$APP_PATH" ]; then
             echo "::error::Expected assembly directory not found: $APP_PATH"
             echo "Available:"
