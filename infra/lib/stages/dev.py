@@ -41,16 +41,16 @@ class DevStage(Stage):
             env=Environment(account=env.account, region=env.region),
         )
         
-        # ecs_bg_stack = EcsBlueGreenStack(
-        #     self,
-        #     f"{project_name}-{env.region}-ecs-blue-green",
-        #     props=EcsBlueGreenStackProps(
-        #         deploy_environment=deploy_environment,
-        #         stack_tags=app_tags,
-        #         vpc=vpc_stack.vpc,
-        #         cluster=base_stack.cluster,
-        #         repository=base_stack.repository,
-        #     ),
-        #     env=Environment(account=env.account, region=env.region),
-        # )
+        ecs_bg_stack = EcsBlueGreenStack(
+            self,
+            f"{project_name}-{env.region}-ecs-blue-green",
+            props=EcsBlueGreenStackProps(
+                deploy_environment=deploy_environment,
+                stack_tags=app_tags,
+                vpc=vpc_stack.vpc,
+                cluster=base_stack.cluster,
+                repository=base_stack.repository,
+            ),
+            env=Environment(account=env.account, region=env.region),
+        )
         

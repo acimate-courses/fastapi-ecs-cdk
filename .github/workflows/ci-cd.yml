@@ -26,6 +26,38 @@ permissions:
   contents: read
 
 jobs:
+  build-docker-image:
+    name: Synthesize CDK (cdk.out)
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::707690426194:role/training-github-oidc-cdk
+          aws-region: us-east-1  # Update to your region
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -f Dockerfile -t fastapi-app:latest .
+
+      - name: Tag Docker image
+        run: |
+          docker tag java-app-repo:latest 707690426194.dkr.ecr.us-east-1.amazonaws.com/fastapi-app:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push 707690426194.dkr.ecr.us-east-1.amazonaws.com/fastapi-app:latest
   synth:
     name: Synthesize CDK (cdk.out)
     runs-on: ubuntu-latest
@@ -136,7 +168,7 @@ jobs:
             STACKS_LIST="$(cdk ls --app '${{ needs.assembly.outputs.app }}' \
               | awk '{ gsub(/\(|\)/,"",$NF); print $NF }')"
             {
-              echo "value<<EOF"
+              echo "value=<<EOF"
               echo "$STACKS_LIST"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
