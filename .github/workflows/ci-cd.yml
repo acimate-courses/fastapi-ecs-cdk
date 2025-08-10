@@ -131,10 +131,12 @@ jobs:
         id: stacks
         run: |
           if [ -n "${{ github.event.inputs.stacks }}" ]; then
-            echo "value=${{ github.event.inputs.stacks }}" >> $GITHUB_OUTPUT
+            echo "value=${{ github.event.inputs.stacks }}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=$(cdk ls --app '${{ steps.assembly.outputs.app }}')" >> $GITHUB_OUTPUT
+            STACKS_LIST="$(cdk ls --app '${{ steps.assembly.outputs.app }}' | awk '{print $NF}')"
+            echo "value=${STACKS_LIST}" >> "$GITHUB_OUTPUT"
           fi
+
 
       # - name: cdk bootstrap (idempotent)
       #   run: cdk bootstrap --app '${{ steps.assembly.outputs.app }}'
